@@ -96,6 +96,10 @@ class TradingBot:
         try:
             logger.debug("Начало торгового цикла")
             
+            # Логируем статус OpenAI обработчика
+            status = self.openai_handler.get_status()
+            logger.info(f"📊 СТАТУС OPENAI: попытки {status['retry_count']}/{status['max_retries']}, история: {status['conversation_length']} сообщений")
+            
             # Получаем обновленные данные мониторинга
             start_time = time.time()
             market_data = await self.api_client.get_market_monitor()

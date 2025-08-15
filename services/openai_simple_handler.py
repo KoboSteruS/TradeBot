@@ -1,6 +1,7 @@
 """Упрощенный обработчик OpenAI с Responses API."""
 import json
-from typing import Dict, Any, List
+import asyncio
+from typing import Dict, Any, List, Optional
 import openai
 from loguru import logger
 
@@ -26,6 +27,12 @@ class OpenAISimpleHandler:
         self.client = openai.OpenAI(api_key=settings.openai_api_key)
         self.model = settings.openai_model
         self.conversation_history: List[Dict[str, str]] = []
+        
+        # Состояние для обработки ошибок
+        self.last_successful_response: Optional[str] = None
+        self.retry_count = 0
+        self.max_retries = 3
+        self.retry_delay = 300  # 5 минут в секундах
         
         logger.info("Инициализирован упрощенный OpenAI обработчик")
     
@@ -104,6 +111,39 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
 
 ВАЖНО: Ответ должен быть валидным JSON без дополнительных символов или текста!"""
     
+    async def _handle_region_error(self) -> Optional[str]:
+        """
+        Обрабатывает ошибку региона, ждет и возвращает последний успешный ответ.
+        
+        Returns:
+            Последний успешный ответ или None если его нет
+        """
+        self.retry_count += 1
+        
+        if self.retry_count > self.max_retries:
+            logger.error(f"🚫 Превышено максимальное количество попыток ({self.max_retries})")
+            return None
+        
+        logger.warning(f"🌍 ОШИБКА РЕГИОНА: попытка {self.retry_count}/{self.max_retries}")
+        
+        if self.last_successful_response:
+            logger.info(f"♻️ ВОЗВРАЩАЮ ПОСЛЕДНЕЕ УСПЕШНОЕ РЕШЕНИЕ: {self.last_successful_response}")
+            return self.last_successful_response
+        else:
+            # Если нет предыдущего ответа, возвращаем решение о паузе
+            fallback_response = {
+                "status": "pause",
+                "response": f"Ошибка региона OpenAI, ожидание {self.retry_delay//60} минут (попытка {self.retry_count}/{self.max_retries})"
+            }
+            fallback_json = json.dumps(fallback_response, ensure_ascii=False)
+            logger.info(f"⏸️ FALLBACK РЕШЕНИЕ: {fallback_json}")
+            return fallback_json
+    
+    async def _wait_and_retry(self) -> None:
+        """Ждет перед повторной попыткой."""
+        logger.info(f"⏰ ОЖИДАНИЕ {self.retry_delay} секунд ({self.retry_delay//60} минут)...")
+        await asyncio.sleep(self.retry_delay)
+    
     async def get_trading_decision(self, market_data: MarketData, is_initial: bool = False) -> str:
         """
         Получает торговое решение от OpenAI.
@@ -155,6 +195,10 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             # Логируем полный ответ от OpenAI
             logger.info(f"🤖 OPENAI ПОЛНЫЙ ОТВЕТ: {assistant_response}")
             
+            # Сохраняем последний успешный ответ
+            self.last_successful_response = assistant_response
+            self.retry_count = 0  # Сбрасываем счетчик попыток при успехе
+            
             # Добавляем ответ в историю
             self.conversation_history.append({
                 "role": "assistant",
@@ -165,9 +209,24 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             if len(self.conversation_history) > 10:
                 self.conversation_history = self.conversation_history[-10:]
             
-            logger.success("Получен ответ от OpenAI")
+            logger.success("✅ Получен успешный ответ от OpenAI")
             return assistant_response
             
+        except openai.PermissionDeniedError as e:
+            if "unsupported_country_region_territory" in str(e):
+                logger.error(f"🌍 ОШИБКА РЕГИОНА OpenAI: {e}")
+                
+                # Обрабатываем ошибку региона
+                fallback_response = await self._handle_region_error()
+                if fallback_response:
+                    # Ждем перед следующей попыткой
+                    await self._wait_and_retry()
+                    return fallback_response
+                else:
+                    raise
+            else:
+                logger.error(f"Ошибка доступа OpenAI: {e}")
+                raise
         except Exception as e:
             logger.error(f"Ошибка получения решения от OpenAI: {e}")
             raise
@@ -260,6 +319,25 @@ BTC: {market_data.user_data.balances.BTC}
             JSON ответ с торговым решением
         """
         return await self.get_trading_decision(market_data, is_initial=False)
+    
+    def get_status(self) -> Dict[str, Any]:
+        """
+        Возвращает текущий статус обработчика.
+        
+        Returns:
+            Словарь с информацией о статусе
+        """
+        return {
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+            "has_last_response": self.last_successful_response is not None,
+            "conversation_length": len(self.conversation_history)
+        }
+    
+    def reset_retry_state(self) -> None:
+        """Сбрасывает состояние повторных попыток."""
+        self.retry_count = 0
+        logger.info("🔄 Состояние повторных попыток сброшено")
     
     async def initialize(self) -> None:
         """Инициализация обработчика - ничего дополнительного не требуется."""
