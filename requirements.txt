@@ -1,0 +1,28 @@
+# Основные зависимости
+pydantic==2.5.3
+pydantic-settings==2.1.0
+openai==1.7.2
+httpx==0.26.0
+loguru==0.7.2
+python-dotenv==1.0.0
+
+# Асинхронные библиотеки
+asyncio-mqtt==0.13.0
+
+# Для работы с JSON и типами
+typing-extensions==4.9.0
+
+# Для работы с датами
+python-dateutil==2.8.2
+
+# Для тестирования (опционально)
+pytest==7.4.4
+pytest-asyncio==0.23.2
+pytest-mock==3.12.0
+pytest-cov==4.1.0
+
+# Для разработки (опционально)
+black==23.12.1
+flake8==7.0.0
+mypy==1.8.0
+pre-commit==3.6.0
