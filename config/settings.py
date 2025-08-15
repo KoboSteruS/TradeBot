@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Настройки приложения."""
     
     # OpenAI настройки
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="API ключ OpenAI")
+    openai_api_key: str = Field(default="", env="OPENAI_API_KEY", description="API ключ OpenAI")
     openai_model: str = Field(default="gpt-4o-mini", description="Модель OpenAI")
     
     # Trading API настройки
