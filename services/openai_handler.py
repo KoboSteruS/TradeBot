@@ -120,7 +120,8 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
                 name="Professional BTC-USDT Trader",
                 instructions=self.get_trader_prompt(),
                 model=self.model,
-                tools=[{"type": "code_interpreter"}]
+                tools=[{"type": "code_interpreter"}],
+                extra_headers={"OpenAI-Beta": "assistants=v2"}
             )
             
             self.assistant_id = assistant.id
@@ -139,7 +140,9 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             ID созданного потока
         """
         try:
-            thread = self.client.beta.threads.create()
+            thread = self.client.beta.threads.create(
+                extra_headers={"OpenAI-Beta": "assistants=v2"}
+            )
             self.thread_id = thread.id
             logger.info(f"Создан поток OpenAI: {self.thread_id}")
             return self.thread_id
@@ -162,7 +165,8 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             self.client.beta.threads.messages.create(
                 thread_id=self.thread_id,
                 role="user",
-                content=content
+                content=content,
+                extra_headers={"OpenAI-Beta": "assistants=v2"}
             )
             logger.debug("Сообщение отправлено в поток")
             
@@ -183,7 +187,8 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
         try:
             run = self.client.beta.threads.runs.create(
                 thread_id=self.thread_id,
-                assistant_id=self.assistant_id
+                assistant_id=self.assistant_id,
+                extra_headers={"OpenAI-Beta": "assistants=v2"}
             )
             logger.debug(f"Запущен ассистент: {run.id}")
             return run.id
@@ -213,7 +218,8 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             try:
                 run = self.client.beta.threads.runs.retrieve(
                     thread_id=self.thread_id, 
-                    run_id=run_id
+                    run_id=run_id,
+                    extra_headers={"OpenAI-Beta": "assistants=v2"}
                 )
                 
                 if run.status == "completed":
@@ -245,7 +251,10 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             raise ValueError("Поток не создан.")
         
         try:
-            messages = self.client.beta.threads.messages.list(thread_id=self.thread_id)
+            messages = self.client.beta.threads.messages.list(
+                thread_id=self.thread_id,
+                extra_headers={"OpenAI-Beta": "assistants=v2"}
+            )
             if not messages.data:
                 raise ValueError("Нет сообщений в потоке")
             

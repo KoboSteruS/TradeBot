@@ -5,7 +5,8 @@ from typing import Optional
 from loguru import logger
 
 from config.settings import Settings
-from services import TradingAPIClient, OpenAIHandler
+from services import TradingAPIClient
+from services.openai_simple_handler import OpenAISimpleHandler
 from handlers import ResponseParser
 from models.trading import MarketData
 from models.responses import BuyDecision, SellDecision, CancelDecision, PauseDecision
@@ -28,7 +29,7 @@ class TradingBot:
         """
         self.settings = settings
         self.api_client: Optional[TradingAPIClient] = None
-        self.openai_handler: Optional[OpenAIHandler] = None
+        self.openai_handler: Optional[OpenAISimpleHandler] = None
         self.parser = ResponseParser()
         self.is_initialized = False
         self.is_running = False
@@ -50,7 +51,7 @@ class TradingBot:
                 raise ConnectionError("Не удалось подключиться к торговому API")
             
             # Инициализируем OpenAI обработчик
-            self.openai_handler = OpenAIHandler(self.settings)
+            self.openai_handler = OpenAISimpleHandler(self.settings)
             await self.openai_handler.initialize()
             
             self.is_initialized = True
