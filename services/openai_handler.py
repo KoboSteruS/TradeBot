@@ -23,7 +23,10 @@ class OpenAIHandler:
             settings: Настройки приложения
         """
         self.settings = settings
-        openai.api_key = settings.openai_api_key
+        self.client = openai.OpenAI(
+            api_key=settings.openai_api_key,
+            default_headers={"OpenAI-Beta": "assistants=v2"}
+        )
         self.model = settings.openai_model
         self.assistant_id: Optional[str] = None
         self.thread_id: Optional[str] = None
@@ -113,7 +116,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             ID созданного ассистента
         """
         try:
-            assistant = openai.beta.assistants.create(
+            assistant = self.client.beta.assistants.create(
                 name="Professional BTC-USDT Trader",
                 instructions=self.get_trader_prompt(),
                 model=self.model,
@@ -136,7 +139,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             ID созданного потока
         """
         try:
-            thread = openai.beta.threads.create()
+            thread = self.client.beta.threads.create()
             self.thread_id = thread.id
             logger.info(f"Создан поток OpenAI: {self.thread_id}")
             return self.thread_id
@@ -156,7 +159,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             raise ValueError("Поток не создан. Вызовите create_thread() сначала.")
         
         try:
-            openai.beta.threads.messages.create(
+            self.client.beta.threads.messages.create(
                 thread_id=self.thread_id,
                 role="user",
                 content=content
@@ -178,7 +181,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             raise ValueError("Поток или ассистент не созданы.")
         
         try:
-            run = openai.beta.threads.runs.create(
+            run = self.client.beta.threads.runs.create(
                 thread_id=self.thread_id,
                 assistant_id=self.assistant_id
             )
@@ -208,7 +211,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
         wait_time = 0
         while wait_time < max_wait_time:
             try:
-                run = openai.beta.threads.runs.retrieve(
+                run = self.client.beta.threads.runs.retrieve(
                     thread_id=self.thread_id, 
                     run_id=run_id
                 )
@@ -242,7 +245,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             raise ValueError("Поток не создан.")
         
         try:
-            messages = openai.beta.threads.messages.list(thread_id=self.thread_id)
+            messages = self.client.beta.threads.messages.list(thread_id=self.thread_id)
             if not messages.data:
                 raise ValueError("Нет сообщений в потоке")
             
