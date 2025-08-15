@@ -68,12 +68,15 @@ class ResponseParser:
         try:
             # Очищаем ответ
             cleaned_text = ResponseParser.clean_json_response(response_text)
-            logger.debug(f"Очищенный ответ: {cleaned_text}")
+            logger.info(f"📝 СЫРОЙ ОТВЕТ: {response_text}")
+            logger.info(f"🧹 ОЧИЩЕННЫЙ JSON: {cleaned_text}")
             
             # Парсим JSON
             try:
                 data = json.loads(cleaned_text)
+                logger.info(f"✅ РАСПАРСЕННЫЙ JSON: {json.dumps(data, ensure_ascii=False, indent=2)}")
             except json.JSONDecodeError as e:
+                logger.error(f"❌ ОШИБКА ПАРСИНГА JSON: {e}")
                 raise ResponseParseError(f"Некорректный JSON: {e}")
             
             # Проверяем наличие обязательных полей
@@ -90,7 +93,9 @@ class ResponseParser:
             
             # Создаем соответствующую модель на основе статуса
             if status == TradingStatus.PAUSE:
-                return PauseDecision(**data)
+                decision = PauseDecision(**data)
+                logger.info(f"⏸️  РЕШЕНИЕ ПАУЗА: {decision.response}")
+                return decision
             
             elif status == TradingStatus.BUY:
                 # Проверяем наличие дополнительных полей для покупки
@@ -100,21 +105,27 @@ class ResponseParser:
                 if missing_fields:
                     raise ResponseParseError(f"Отсутствуют поля для решения о покупке: {missing_fields}")
                 
-                return BuyDecision(**data)
+                decision = BuyDecision(**data)
+                logger.info(f"📈 РЕШЕНИЕ ПОКУПКА: {decision.buy_amount} USDT, TP: {decision.take_profit_percent}%, SL: {decision.stop_loss_percent}% | {decision.response}")
+                return decision
             
             elif status == TradingStatus.SELL:
                 # Проверяем наличие дополнительных полей для продажи
                 if 'sell_amount' not in data:
                     raise ResponseParseError("Отсутствует поле 'sell_amount' для решения о продаже")
                 
-                return SellDecision(**data)
+                decision = SellDecision(**data)
+                logger.info(f"📉 РЕШЕНИЕ ПРОДАЖА: {decision.sell_amount} BTC | {decision.response}")
+                return decision
             
             elif status == TradingStatus.CANCEL:
                 # Проверяем наличие дополнительных полей для отмены
                 if 'order_id' not in data:
                     raise ResponseParseError("Отсутствует поле 'order_id' для решения об отмене")
                 
-                return CancelDecision(**data)
+                decision = CancelDecision(**data)
+                logger.info(f"❌ РЕШЕНИЕ ОТМЕНА: ордер {decision.order_id} | {decision.response}")
+                return decision
             
             else:
                 raise ResponseParseError(f"Неизвестный статус: {status}")

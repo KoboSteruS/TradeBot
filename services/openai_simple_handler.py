@@ -119,8 +119,13 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             # Подготавливаем сообщение
             if is_initial:
                 message = self._prepare_initial_message(market_data)
+                logger.info("📊 ОТПРАВКА НАЧАЛЬНЫХ ДАННЫХ В OPENAI")
             else:
                 message = self._prepare_update_message(market_data)
+                logger.info("🔄 ОТПРАВКА ОБНОВЛЕННЫХ ДАННЫХ В OPENAI")
+            
+            # Логируем размер сообщения (без полного содержимого - оно очень большое)
+            logger.debug(f"📏 РАЗМЕР СООБЩЕНИЯ: {len(message)} символов")
             
             # Добавляем сообщение в историю
             self.conversation_history.append({
@@ -143,6 +148,13 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             
             assistant_response = response.choices[0].message.content
             
+            # Логируем информацию об использованных токенах
+            if response.usage:
+                logger.info(f"💰 ТОКЕНЫ: input={response.usage.prompt_tokens}, output={response.usage.completion_tokens}, total={response.usage.total_tokens}")
+            
+            # Логируем полный ответ от OpenAI
+            logger.info(f"🤖 OPENAI ПОЛНЫЙ ОТВЕТ: {assistant_response}")
+            
             # Добавляем ответ в историю
             self.conversation_history.append({
                 "role": "assistant",
@@ -153,7 +165,7 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
             if len(self.conversation_history) > 10:
                 self.conversation_history = self.conversation_history[-10:]
             
-            logger.info("Получен ответ от OpenAI")
+            logger.success("Получен ответ от OpenAI")
             return assistant_response
             
         except Exception as e:

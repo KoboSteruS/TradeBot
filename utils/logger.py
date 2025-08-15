@@ -77,6 +77,19 @@ def setup_logger(settings) -> None:
         diagnose=False
     )
     
+    # Файловое логирование - ответы OpenAI
+    logger.add(
+        log_dir / "openai_responses.log",
+        format=log_format,
+        level="INFO",
+        rotation="50 MB",
+        retention="30 days",
+        compression="zip",
+        filter=lambda record: "🤖 OPENAI" in record["message"] or "📝 СЫРОЙ ОТВЕТ" in record["message"] or "✅ РАСПАРСЕННЫЙ JSON" in record["message"],
+        backtrace=False,
+        diagnose=False
+    )
+    
     logger.info(f"Логирование настроено. Уровень: {settings.log_level}")
 
 
