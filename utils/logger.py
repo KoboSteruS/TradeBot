@@ -1,11 +1,14 @@
 """Настройка логирования для приложения."""
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 from loguru import logger
-from config.settings import Settings
+
+if TYPE_CHECKING:
+    from config.settings import Settings
 
 
-def setup_logger(settings: Settings) -> None:
+def setup_logger(settings) -> None:
     """
     Настраивает логирование для приложения.
     
