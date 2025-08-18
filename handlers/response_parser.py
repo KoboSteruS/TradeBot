@@ -91,6 +91,16 @@ class ResponseParser:
             
             status = data['status'].lower()
             
+            # Проверяем и исправляем неправильные статусы
+            valid_statuses = [TradingStatus.PAUSE, TradingStatus.BUY, TradingStatus.SELL, TradingStatus.CANCEL]
+            if status not in valid_statuses:
+                logger.warning(f"🚨 НЕПРАВИЛЬНЫЙ СТАТУС '{status}' -> ИСПРАВЛЯЮ НА 'pause'")
+                original_status = data['status']
+                status = TradingStatus.PAUSE
+                # Исправляем данные
+                data['status'] = status
+                data['response'] = f"Исправлен неправильный статус '{original_status}' на pause. " + str(data.get('response', ''))
+            
             # Создаем соответствующую модель на основе статуса
             if status == TradingStatus.PAUSE:
                 decision = PauseDecision(**data)
