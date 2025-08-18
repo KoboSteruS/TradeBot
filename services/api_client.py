@@ -46,6 +46,78 @@ class TradingAPIClient:
         logger.info(f"Инициализирован API клиент для {self.base_url}")
         logger.info(f"⏱️ ТАЙМАУТЫ: connect={timeout_config.connect}s, read={timeout_config.read}s, write={timeout_config.write}s")
     
+    def _adapt_monitor_data(self, monitor_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Адаптирует данные мониторинга к формату MarketData.
+        
+        Args:
+            monitor_data: Сырые данные от /api/v1/market/monitor
+            
+        Returns:
+            Адаптированные данные в формате MarketData
+        """
+        try:
+            # Если данные уже в правильном формате
+            if 'market_data' in monitor_data and 'user_data' in monitor_data:
+                return monitor_data
+            
+            # Создаем адаптированную структуру
+            adapted = {
+                "success": monitor_data.get("success", True),
+                "inst_id": monitor_data.get("inst_id", "BTC-USDT"),
+                "timestamp": monitor_data.get("timestamp", ""),
+                "message": monitor_data.get("message", "Данные мониторинга получены"),
+                
+                # Создаем пустую структуру market_data если её нет
+                "market_data": {
+                    "orderbook": [],
+                    "candles": {
+                        "1m": []
+                    }
+                },
+                
+                # Создаем пустую структуру user_data если её нет
+                "user_data": {
+                    "active_orders": [],
+                    "balances": {
+                        "USDT": 0.0,
+                        "BTC": 0.0
+                    }
+                },
+                
+                # Создаем пустую структуру indicators если её нет
+                "indicators": {
+                    "current_price": "0",
+                    "volume_24h": "0", 
+                    "change_24h": "0",
+                    "high_24h": "0",
+                    "low_24h": "0"
+                }
+            }
+            
+            # Заполняем данные из исходного ответа если они есть
+            if 'market_data' in monitor_data:
+                adapted['market_data'].update(monitor_data['market_data'])
+            
+            if 'user_data' in monitor_data:
+                adapted['user_data'].update(monitor_data['user_data'])
+                
+            if 'indicators' in monitor_data:
+                adapted['indicators'].update(monitor_data['indicators'])
+            
+            # Копируем остальные поля
+            for key, value in monitor_data.items():
+                if key not in ['market_data', 'user_data', 'indicators'] and key not in adapted:
+                    adapted[key] = value
+            
+            logger.info("🔄 ДАННЫЕ МОНИТОРИНГА АДАПТИРОВАНЫ к формату MarketData")
+            return adapted
+            
+        except Exception as e:
+            logger.error(f"❌ ОШИБКА АДАПТАЦИИ данных мониторинга: {e}")
+            logger.error(f"📊 ИСХОДНЫЕ ДАННЫЕ: {monitor_data}")
+            raise
+    
     async def __aenter__(self):
         """Асинхронный контекстный менеджер - вход."""
         return self
@@ -160,8 +232,15 @@ class TradingAPIClient:
         params = {"demo": str(self.demo_mode).lower()}
         data = await self._make_request("GET", "/api/v1/market/monitor", params=params)
         
-        logger.debug(f"Получены данные мониторинга для {data.get('inst_id', 'N/A')}")
-        return MarketData(**data)
+        # Логируем структуру ответа для диагностики
+        logger.info(f"📊 СТРУКТУРА ОТВЕТА MONITOR: {list(data.keys())}")
+        logger.debug(f"📊 ПОЛНЫЙ ОТВЕТ MONITOR: {data}")
+        
+        # Адаптируем данные мониторинга к формату MarketData
+        adapted_data = self._adapt_monitor_data(data)
+        
+        logger.debug(f"Получены данные мониторинга для {adapted_data.get('inst_id', 'N/A')}")
+        return MarketData(**adapted_data)
     
     async def place_buy_order(
         self, 
