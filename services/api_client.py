@@ -27,9 +27,16 @@ class TradingAPIClient:
         self.demo_mode = settings.demo_mode
         self.timeout = 30.0
         
-        # Настройки HTTP клиента
+        # Настройки HTTP клиента с увеличенными таймаутами
+        timeout_config = httpx.Timeout(
+            connect=10.0,   # Время на установку соединения
+            read=60.0,      # Время на получение ответа (для аналитики)
+            write=10.0,     # Время на отправку запроса
+            pool=5.0        # Время для повторного использования соединений
+        )
+        
         self.client = httpx.AsyncClient(
-            timeout=self.timeout,
+            timeout=timeout_config,
             headers={
                 "Content-Type": "application/json",
                 "User-Agent": "TradeBot/1.0.0"
@@ -37,6 +44,7 @@ class TradingAPIClient:
         )
         
         logger.info(f"Инициализирован API клиент для {self.base_url}")
+        logger.info(f"⏱️ ТАЙМАУТЫ: connect={timeout_config.connect}s, read={timeout_config.read}s, write={timeout_config.write}s")
     
     async def __aenter__(self):
         """Асинхронный контекстный менеджер - вход."""
@@ -91,11 +99,19 @@ class TradingAPIClient:
             logger.debug(f"Получен ответ от {url}: {response.status_code}")
             return data
             
+        except httpx.RemoteProtocolError as e:
+            logger.error(f"🔌 ОШИБКА СОЕДИНЕНИЯ: сервер разорвал соединение для {url}: {e}")
+            logger.info("💡 Возможно, запрос обрабатывается слишком долго. Попробуйте еще раз.")
+            raise
+        except httpx.TimeoutException as e:
+            logger.error(f"⏱️ ТАЙМАУТ ЗАПРОСА к {url}: {e}")
+            logger.info("💡 Сервер не ответил в установленное время. Проверьте доступность API.")
+            raise
         except httpx.HTTPError as e:
-            logger.error(f"Ошибка HTTP запроса к {url}: {e}")
+            logger.error(f"🌐 ОШИБКА HTTP запроса к {url}: {e}")
             raise
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при запросе к {url}: {e}")
+            logger.error(f"❌ НЕОЖИДАННАЯ ОШИБКА при запросе к {url}: {e}")
             raise
     
     async def get_health(self) -> Dict[str, Any]:
@@ -115,10 +131,24 @@ class TradingAPIClient:
             Полные рыночные данные включая исторические свечи
         """
         params = {"demo": str(self.demo_mode).lower()}
-        data = await self._make_request("GET", "/api/v1/market/analytics", params=params)
         
-        logger.info(f"Получены аналитические данные для {data.get('inst_id', 'N/A')}")
-        return MarketData(**data)
+        # Попытки повтора при проблемах с соединением
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                data = await self._make_request("GET", "/api/v1/market/analytics", params=params)
+                logger.info(f"Получены аналитические данные для {data.get('inst_id', 'N/A')}")
+                return MarketData(**data)
+                
+            except (httpx.RemoteProtocolError, httpx.TimeoutException) as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5  # 5, 10, 15 секунд
+                    logger.warning(f"🔄 ПОВТОР {attempt + 1}/{max_retries} через {wait_time}s после ошибки: {e}")
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"❌ ВСЕ ПОПЫТКИ ({max_retries}) ИСЧЕРПАНЫ для получения аналитики")
+                    raise
     
     async def get_market_monitor(self) -> MarketData:
         """
