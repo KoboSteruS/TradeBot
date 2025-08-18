@@ -326,15 +326,23 @@ target_apy = {self.settings.target_apy}  # целевая годовая дох�
         Returns:
             Сообщение для OpenAI
         """
+        orderbook = market_data.market_data.get('orderbook', [])
+        candles = market_data.market_data.get('candles', {}).get('1m', [])
+        
         return f"""ОБНОВЛЕНИЕ РЫНОЧНЫХ ДАННЫХ:
 
 Время: {market_data.timestamp}
 
-СТАКАН ОРДЕРОВ:
-{json.dumps(market_data.market_data.get('orderbook', []), ensure_ascii=False, indent=2)}
+СТАТИСТИКА ДАННЫХ:
+📊 Стакан ордеров: {len(orderbook)} записей
+📈 Минутные свечи: {len(candles)} записей  
+📋 Активные ордера: {len(market_data.user_data.active_orders)} записей
 
-ПОСЛЕДНИЕ СВЕЧИ (1m):
-{json.dumps(market_data.market_data.get('candles', {}).get('1m', [])[:10], ensure_ascii=False, indent=2)}
+СТАКАН ОРДЕРОВ (топ-5):
+{json.dumps(orderbook[:5], ensure_ascii=False, indent=2)}
+
+ПОСЛЕДНИЕ СВЕЧИ (1m, топ-3):
+{json.dumps(candles[:3], ensure_ascii=False, indent=2)}
 
 БАЛАНС:
 USDT: {market_data.user_data.balances.USDT}
@@ -346,8 +354,11 @@ BTC: {market_data.user_data.balances.BTC}
 ТЕКУЩИЕ ИНДИКАТОРЫ:
 Цена: {market_data.indicators.current_price}
 Объем 24ч: {market_data.indicators.volume_24h}
+Изменение 24ч: {market_data.indicators.change_24h}%
+Максимум 24ч: {market_data.indicators.high_24h}
+Минимум 24ч: {market_data.indicators.low_24h}
 
-Обнови свой анализ и прими торговое решение. Ответь в формате JSON."""
+Обнови свой анализ и прими торговое решение на основе ДОСТУПНЫХ данных. Ответь в формате JSON."""
     
     async def send_initial_data(self, market_data: MarketData) -> str:
         """

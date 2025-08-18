@@ -105,9 +105,27 @@ class TradingAPIClient:
             if 'indicators' in monitor_data:
                 adapted['indicators'].update(monitor_data['indicators'])
             
+            # Маппинг полей из плоской структуры в вложенную
+            if 'candles_1m' in monitor_data:
+                adapted['market_data']['candles'] = {'1m': monitor_data['candles_1m']}
+                logger.debug(f"📈 СВЕЧИ 1M: {len(monitor_data['candles_1m'])} записей")
+            
+            if 'orderbook' in monitor_data:
+                adapted['market_data']['orderbook'] = monitor_data['orderbook']
+                logger.debug(f"📊 СТАКАН: {len(monitor_data['orderbook'])} записей")
+            
+            if 'active_orders' in monitor_data:
+                adapted['user_data']['active_orders'] = monitor_data['active_orders']
+                logger.debug(f"📋 АКТИВНЫЕ ОРДЕРА: {len(monitor_data['active_orders'])} записей")
+            
+            if 'balances' in monitor_data:
+                adapted['user_data']['balances'] = monitor_data['balances']
+                logger.debug(f"💰 БАЛАНСЫ: {monitor_data['balances']}")
+            
             # Копируем остальные поля
+            excluded_keys = ['market_data', 'user_data', 'indicators', 'candles_1m', 'orderbook', 'active_orders', 'balances']
             for key, value in monitor_data.items():
-                if key not in ['market_data', 'user_data', 'indicators'] and key not in adapted:
+                if key not in excluded_keys and key not in adapted:
                     adapted[key] = value
             
             logger.info("🔄 ДАННЫЕ МОНИТОРИНГА АДАПТИРОВАНЫ к формату MarketData")
