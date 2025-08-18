@@ -285,7 +285,7 @@ class TradingAPIClient:
         }
         
         logger.info(f"Размещение ордера на покупку: {amount} USDT, TP: {take_profit_percent}%, SL: {stop_loss_percent}%")
-        return await self._make_request("POST", "/api/v1/orders/buy", json_data=json_data)
+        return await self._make_request("POST", "/api/v1/buy", json_data=json_data)
     
     async def place_sell_order(self, amount: float) -> Dict[str, Any]:
         """
@@ -303,7 +303,7 @@ class TradingAPIClient:
         }
         
         logger.info(f"Размещение ордера на продажу: {amount} BTC")
-        return await self._make_request("POST", "/api/v1/orders/sell", json_data=json_data)
+        return await self._make_request("POST", "/api/v1/sell", json_data=json_data)
     
     async def cancel_order(self, order_id: str) -> Dict[str, Any]:
         """
@@ -321,7 +321,7 @@ class TradingAPIClient:
         }
         
         logger.info(f"Отмена ордера: {order_id}")
-        return await self._make_request("POST", "/api/v1/orders/cancel", json_data=json_data)
+        return await self._make_request("POST", "/api/v1/cancel", json_data=json_data)
     
     async def test_connection(self) -> bool:
         """
