@@ -99,6 +99,7 @@ class TradingBot:
             # Логируем статус OpenAI обработчика
             status = self.openai_handler.get_status()
             logger.info(f"📊 СТАТУС OPENAI: попытки {status['retry_count']}/{status['max_retries']}, история: {status['conversation_length']} сообщений")
+            logger.info(f"🔒 ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: активен={status['request_in_progress']}, последний запрос {status['time_since_last_request']}s назад, можно запрос={status['can_make_request']}")
             
             # Получаем обновленные данные мониторинга
             start_time = time.time()

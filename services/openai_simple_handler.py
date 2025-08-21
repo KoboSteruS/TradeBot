@@ -1,6 +1,7 @@
 """Упрощенный обработчик OpenAI с Responses API."""
 import json
 import asyncio
+import time
 from typing import Dict, Any, List, Optional
 import openai
 from loguru import logger
@@ -33,6 +34,12 @@ class OpenAISimpleHandler:
         self.retry_count = 0
         self.max_retries = 3
         self.retry_delay = 300  # 5 минут в секундах
+        
+        # Защита от дублирования запросов
+        self._request_in_progress = False
+        self._last_request_timestamp = 0
+        self._min_request_interval = 5  # Минимум 5 секунд между запросами
+        self._request_lock = asyncio.Lock()
         
         logger.info("Инициализирован упрощенный OpenAI обработчик")
     
@@ -222,7 +229,7 @@ TP/SL:
     
     async def get_trading_decision(self, market_data: MarketData, is_initial: bool = False) -> str:
         """
-        Получает торговое решение от OpenAI.
+        Получает торговое решение от OpenAI с защитой от дублирования.
         
         Args:
             market_data: Рыночные данные
@@ -231,6 +238,33 @@ TP/SL:
         Returns:
             JSON ответ с торговым решением
         """
+        # Защита от дублирования запросов
+        async with self._request_lock:
+            current_time = time.time()
+            
+            # Проверяем, не слишком ли часто отправляем запросы
+            if not is_initial and (current_time - self._last_request_timestamp) < self._min_request_interval:
+                logger.warning(f"🚫 ЗАПРОС ОТКЛОНЕН: слишком быстро после предыдущего ({current_time - self._last_request_timestamp:.1f}s)")
+                # Возвращаем последний успешный ответ или паузу
+                if self.last_successful_response:
+                    logger.info("🔄 ВОЗВРАЩАЮ ПОСЛЕДНИЙ УСПЕШНЫЙ ОТВЕТ")
+                    return self.last_successful_response
+                else:
+                    return '{"status": "pause", "response": "ПРОГНОЗ: НЕОПРЕДЕЛЕННО - слишком частые запросы, ожидаю"}'
+            
+            # Проверяем, нет ли уже запроса в процессе
+            if self._request_in_progress:
+                logger.warning("🚫 ЗАПРОС УЖЕ ВЫПОЛНЯЕТСЯ - ОТКЛОНЯЮ ДУБЛИРУЮЩИЙ")
+                if self.last_successful_response:
+                    return self.last_successful_response
+                else:
+                    return '{"status": "pause", "response": "ПРОГНОЗ: НЕОПРЕДЕЛЕННО - предыдущий запрос еще обрабатывается"}'
+            
+            # Устанавливаем флаг выполнения запроса
+            self._request_in_progress = True
+            self._last_request_timestamp = current_time
+            logger.info(f"🔒 БЛОКИРОВКА УСТАНОВЛЕНА - начинаю обработку запроса")
+        
         try:
             # Подготавливаем сообщение
             if is_initial:
@@ -331,6 +365,10 @@ TP/SL:
         except Exception as e:
             logger.error(f"Ошибка получения решения от OpenAI: {e}")
             raise
+        finally:
+            # Освобождаем блокировку
+            self._request_in_progress = False
+            logger.info("🔓 БЛОКИРОВКА СНЯТА - запрос завершен")
     
     def _prepare_initial_message(self, market_data: MarketData) -> str:
         """
@@ -439,11 +477,18 @@ BTC: {market_data.user_data.balances.BTC}
         Returns:
             Словарь с информацией о статусе
         """
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_timestamp
+        
         return {
             "retry_count": self.retry_count,
             "max_retries": self.max_retries,
             "has_last_response": self.last_successful_response is not None,
-            "conversation_length": len(self.conversation_history)
+            "conversation_length": len(self.conversation_history),
+            "request_in_progress": self._request_in_progress,
+            "time_since_last_request": round(time_since_last_request, 1),
+            "min_request_interval": self._min_request_interval,
+            "can_make_request": time_since_last_request >= self._min_request_interval and not self._request_in_progress
         }
     
     def reset_retry_state(self) -> None:
