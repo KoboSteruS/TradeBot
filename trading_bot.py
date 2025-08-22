@@ -199,6 +199,14 @@ class TradingBot:
                 logger.info(f"ПАУЗА: {decision.response}")
             
             elif isinstance(decision, BuyDecision):
+                # Проверяем баланс перед покупкой
+                current_balance = market_data.user_data.get('balances', {}).get('USDT', 0)
+                
+                if current_balance < decision.buy_amount:
+                    logger.warning(f"⚠️ НЕДОСТАТОЧНО СРЕДСТВ: требуется {decision.buy_amount} USDT, доступно {current_balance} USDT")
+                    log_trading_decision("pause", f"Недостаточно средств для покупки: требуется {decision.buy_amount} USDT, доступно {current_balance} USDT")
+                    return
+                
                 log_trading_decision(
                     "buy", 
                     f"Сумма: {decision.buy_amount} USDT, TP: {decision.take_profit_percent}%, SL: {decision.stop_loss_percent}%"
