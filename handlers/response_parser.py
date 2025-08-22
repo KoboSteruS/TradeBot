@@ -12,7 +12,8 @@ from models.responses import (
     OrdersCancelDecision,
     OrdersSellDecision,
     TradingDecision,
-    OrdersDecision
+    OrdersDecision,
+    TradingStatus
 )
 
 
