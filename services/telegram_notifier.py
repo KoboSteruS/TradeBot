@@ -30,7 +30,8 @@ class TelegramNotifier:
         timeout_config = httpx.Timeout(
             connect=5.0,
             read=10.0,
-            write=5.0
+            write=5.0,
+            pool=5.0
         )
         
         self.client = httpx.AsyncClient(
