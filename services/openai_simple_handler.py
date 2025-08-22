@@ -389,16 +389,16 @@ TP/SL:
 {json.dumps(market_data.market_data, ensure_ascii=False, indent=2)}
 
 ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ:
-Баланс USDT: {market_data.user_data.balances.USDT}
-Баланс BTC: {market_data.user_data.balances.BTC}
-Активные ордера: {len(market_data.user_data.active_orders)}
+Баланс USDT: {market_data.user_data.get('balances', {}).get('USDT', 0)}
+Баланс BTC: {market_data.user_data.get('balances', {}).get('BTC', 0)}
+Активные ордера: {len(market_data.user_data.get('active_orders', []))}
 
 ИНДИКАТОРЫ:
-Текущая цена: {market_data.indicators.current_price}
-Объем 24ч: {market_data.indicators.volume_24h}
-Изменение 24ч: {market_data.indicators.change_24h}%
-Максимум 24ч: {market_data.indicators.high_24h}
-Минимум 24ч: {market_data.indicators.low_24h}
+Текущая цена: {market_data.indicators.get('current_price', '0')}
+Объем 24ч: {market_data.indicators.get('volume_24h', '0')}
+Изменение 24ч: {market_data.indicators.get('change_24h', '0')}%
+Максимум 24ч: {market_data.indicators.get('high_24h', '0')}
+Минимум 24ч: {market_data.indicators.get('low_24h', '0')}
 
 Проанализируй данные и сформируй начальную торговую стратегию. Ответь в формате JSON."""
     
@@ -431,18 +431,18 @@ TP/SL:
 {json.dumps(candles[:3], ensure_ascii=False, indent=2)}
 
 БАЛАНС:
-USDT: {market_data.user_data.balances.USDT}
-BTC: {market_data.user_data.balances.BTC}
+USDT: {market_data.user_data.get('balances', {}).get('USDT', 0)}
+BTC: {market_data.user_data.get('balances', {}).get('BTC', 0)}
 
 АКТИВНЫЕ ОРДЕРА:
-{json.dumps(market_data.user_data.active_orders, ensure_ascii=False, indent=2)}
+{json.dumps(market_data.user_data.get('active_orders', []), ensure_ascii=False, indent=2)}
 
 ТЕКУЩИЕ ИНДИКАТОРЫ:
-Цена: {market_data.indicators.current_price}
-Объем 24ч: {market_data.indicators.volume_24h}
-Изменение 24ч: {market_data.indicators.change_24h}%
-Максимум 24ч: {market_data.indicators.high_24h}
-Минимум 24ч: {market_data.indicators.low_24h}
+Цена: {market_data.indicators.get('current_price', '0')}
+Объем 24ч: {market_data.indicators.get('volume_24h', '0')}
+Изменение 24ч: {market_data.indicators.get('change_24h', '0')}%
+Максимум 24ч: {market_data.indicators.get('high_24h', '0')}
+Минимум 24ч: {market_data.indicators.get('low_24h', '0')}
 
 Обнови свой анализ и прими торговое решение на основе ДОСТУПНЫХ данных. Ответь в формате JSON."""
     
