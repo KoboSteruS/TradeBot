@@ -1,7 +1,7 @@
 """Модели ответов от OpenAI."""
 from typing import Literal, Optional
 from pydantic import Field
-from .base import Base
+from .base import BaseModel
 
 
 class TradingStatus:
@@ -11,12 +11,12 @@ class TradingStatus:
     CANCEL = "cancel"
 
 
-class PauseDecision(Base):
+class PauseDecision(BaseModel):
     status: Literal[TradingStatus.PAUSE] = Field(..., description="Статус решения: pause")
     response: str = Field(..., description="Краткое объяснение решения")
 
 
-class BuyDecision(Base):
+class BuyDecision(BaseModel):
     status: Literal[TradingStatus.BUY] = Field(..., description="Статус решения: buy")
     response: str = Field(..., description="Краткое объяснение решения")
     buy_amount: float = Field(..., gt=0, description="Сумма покупки в USDT")
@@ -24,25 +24,25 @@ class BuyDecision(Base):
     stop_loss_percent: float = Field(..., gt=0, description="Процент стоп-лосса")
 
 
-class SellDecision(Base):
+class SellDecision(BaseModel):
     status: Literal[TradingStatus.SELL] = Field(..., description="Статус решения: sell")
     response: str = Field(..., description="Краткое объяснение решения")
     sell_amount: float = Field(..., gt=0, description="Количество BTC для продажи")
 
 
-class CancelDecision(Base):
+class CancelDecision(BaseModel):
     status: Literal[TradingStatus.CANCEL] = Field(..., description="Статус решения: cancel")
     response: str = Field(..., description="Краткое объяснение решения")
     order_id: str = Field(..., description="ID ордера для отмены")
 
 
-class OrdersCancelDecision(Base):
+class OrdersCancelDecision(BaseModel):
     status: Literal[TradingStatus.CANCEL] = Field(..., description="Статус решения: cancel")
     response: str = Field(..., description="Краткое объяснение решения")
     order_id: str = Field(..., description="ID ордера для отмены")
 
 
-class OrdersSellDecision(Base):
+class OrdersSellDecision(BaseModel):
     status: Literal[TradingStatus.SELL] = Field(..., description="Статус решения: sell")
     response: str = Field(..., description="Краткое объяснение решения")
     sell_amount: Optional[float] = Field(None, gt=0, description="Количество BTC для продажи (если None - продать все)")
