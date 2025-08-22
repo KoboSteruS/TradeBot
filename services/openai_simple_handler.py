@@ -422,7 +422,7 @@ TP/SL:
 СТАТИСТИКА ДАННЫХ:
 📊 Стакан ордеров: {len(orderbook)} записей
 📈 Минутные свечи: {len(candles)} записей  
-📋 Активные ордера: {len(market_data.user_data.active_orders)} записей
+📋 Активные ордера: {len(market_data.user_data.get('active_orders', []))} записей
 
 СТАКАН ОРДЕРОВ (топ-5):
 {json.dumps(orderbook[:5], ensure_ascii=False, indent=2)}
