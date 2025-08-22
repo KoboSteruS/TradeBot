@@ -1,60 +1,53 @@
 """Модели ответов от OpenAI."""
-from typing import Optional
-from pydantic import Field, validator
-from .base import BaseModel
-from .trading import TradingStatus
+from typing import Literal, Optional
+from pydantic import Field
+from .base import Base
 
 
-class OpenAIResponse(BaseModel):
-    """Базовый ответ от OpenAI."""
-    status: TradingStatus = Field(..., description="Статус торгового решения")
-    response: str = Field(..., description="Объяснение решения")
+class TradingStatus:
+    PAUSE = "pause"
+    BUY = "buy"
+    SELL = "sell"
+    CANCEL = "cancel"
 
 
-class BuyDecision(OpenAIResponse):
-    """Решение о покупке."""
-    buy_amount: float = Field(..., gt=0, description="Сумма для покупки в USDT")
-    take_profit_percent: float = Field(..., gt=0, le=100, description="Take Profit в процентах")
-    stop_loss_percent: float = Field(..., gt=0, le=100, description="Stop Loss в процентах")
-    
-    @validator('status')
-    def validate_status(cls, v):
-        """Проверяет, что статус соответствует типу решения."""
-        if v != TradingStatus.BUY:
-            raise ValueError(f"Статус должен быть '{TradingStatus.BUY}' для решения о покупке")
-        return v
+class PauseDecision(Base):
+    status: Literal[TradingStatus.PAUSE] = Field(..., description="Статус решения: pause")
+    response: str = Field(..., description="Краткое объяснение решения")
 
 
-class SellDecision(OpenAIResponse):
-    """Решение о продаже."""
+class BuyDecision(Base):
+    status: Literal[TradingStatus.BUY] = Field(..., description="Статус решения: buy")
+    response: str = Field(..., description="Краткое объяснение решения")
+    buy_amount: float = Field(..., gt=0, description="Сумма покупки в USDT")
+    take_profit_percent: float = Field(..., gt=0, description="Процент тейк-профита")
+    stop_loss_percent: float = Field(..., gt=0, description="Процент стоп-лосса")
+
+
+class SellDecision(Base):
+    status: Literal[TradingStatus.SELL] = Field(..., description="Статус решения: sell")
+    response: str = Field(..., description="Краткое объяснение решения")
     sell_amount: float = Field(..., gt=0, description="Количество BTC для продажи")
-    
-    @validator('status')
-    def validate_status(cls, v):
-        """Проверяет, что статус соответствует типу решения."""
-        if v != TradingStatus.SELL:
-            raise ValueError(f"Статус должен быть '{TradingStatus.SELL}' для решения о продаже")
-        return v
 
 
-class CancelDecision(OpenAIResponse):
-    """Решение об отмене ордера."""
+class CancelDecision(Base):
+    status: Literal[TradingStatus.CANCEL] = Field(..., description="Статус решения: cancel")
+    response: str = Field(..., description="Краткое объяснение решения")
     order_id: str = Field(..., description="ID ордера для отмены")
-    
-    @validator('status')
-    def validate_status(cls, v):
-        """Проверяет, что статус соответствует типу решения."""
-        if v != TradingStatus.CANCEL:
-            raise ValueError(f"Статус должен быть '{TradingStatus.CANCEL}' для решения об отмене")
-        return v
 
 
-class PauseDecision(OpenAIResponse):
-    """Решение о паузе."""
-    
-    @validator('status')
-    def validate_status(cls, v):
-        """Проверяет, что статус соответствует типу решения."""
-        if v != TradingStatus.PAUSE:
-            raise ValueError(f"Статус должен быть '{TradingStatus.PAUSE}' для решения о паузе")
-        return v
+class OrdersCancelDecision(Base):
+    status: Literal[TradingStatus.CANCEL] = Field(..., description="Статус решения: cancel")
+    response: str = Field(..., description="Краткое объяснение решения")
+    order_id: str = Field(..., description="ID ордера для отмены")
+
+
+class OrdersSellDecision(Base):
+    status: Literal[TradingStatus.SELL] = Field(..., description="Статус решения: sell")
+    response: str = Field(..., description="Краткое объяснение решения")
+    sell_amount: Optional[float] = Field(None, gt=0, description="Количество BTC для продажи (если None - продать все)")
+
+
+# Union типы для всех возможных решений
+TradingDecision = PauseDecision | BuyDecision | SellDecision | CancelDecision
+OrdersDecision = PauseDecision | OrdersCancelDecision | OrdersSellDecision

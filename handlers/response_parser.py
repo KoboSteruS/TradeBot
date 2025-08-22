@@ -5,13 +5,15 @@ from typing import Union, Dict, Any
 from loguru import logger
 
 from models.responses import (
-    OpenAIResponse, 
     BuyDecision, 
     SellDecision, 
     CancelDecision, 
-    PauseDecision
+    PauseDecision,
+    OrdersCancelDecision,
+    OrdersSellDecision,
+    TradingDecision,
+    OrdersDecision
 )
-from models.trading import TradingStatus
 
 
 class ResponseParseError(Exception):
@@ -92,11 +94,11 @@ class ResponseParser:
             status = data['status'].lower()
             
             # Проверяем и исправляем неправильные статусы
-            valid_statuses = [TradingStatus.PAUSE, TradingStatus.BUY, TradingStatus.SELL, TradingStatus.CANCEL]
+            valid_statuses = ['pause', 'buy', 'sell', 'cancel']
             if status not in valid_statuses:
                 logger.warning(f"🚨 НЕПРАВИЛЬНЫЙ СТАТУС '{status}' -> ИСПРАВЛЯЮ НА 'pause'")
                 original_status = data['status']
-                status = TradingStatus.PAUSE
+                status = 'pause'
                 # Исправляем данные
                 data['status'] = status
                 data['response'] = f"Исправлен неправильный статус '{original_status}' на pause. " + str(data.get('response', ''))
@@ -200,7 +202,7 @@ class ResponseParser:
             return False
     
     @staticmethod
-    def parse_and_validate(response_text: str) -> Union[BuyDecision, SellDecision, CancelDecision, PauseDecision]:
+    def parse_and_validate(response_text: str) -> TradingDecision:
         """
         Парсит и валидирует ответ от OpenAI.
         
@@ -222,6 +224,78 @@ class ResponseParser:
         
         logger.info(f"Успешно распарсено и валидировано решение: {decision.status}")
         return decision
+    
+    @staticmethod
+    def parse_orders_decision(response_text: str) -> OrdersDecision:
+        """
+        Парсит ответ от OpenAI для решений по ордерам.
+        
+        Args:
+            response_text: JSON ответ от OpenAI
+            
+        Returns:
+            Типизированное решение по ордерам
+            
+        Raises:
+            ResponseParseError: При ошибке парсинга
+        """
+        try:
+            # Очищаем ответ
+            cleaned_text = ResponseParser.clean_json_response(response_text)
+            logger.info(f"📝 СЫРОЙ ОТВЕТ ПО ОРДЕРАМ: {response_text}")
+            logger.info(f"🧹 ОЧИЩЕННЫЙ JSON ПО ОРДЕРАМ: {cleaned_text}")
+            
+            # Парсим JSON
+            try:
+                data = json.loads(cleaned_text)
+                logger.info(f"✅ РАСПАРСЕННЫЙ JSON ПО ОРДЕРАМ: {json.dumps(data, ensure_ascii=False, indent=2)}")
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ ОШИБКА ПАРСИНГА JSON ПО ОРДЕРАМ: {e}")
+                raise ResponseParseError(f"Некорректный JSON: {e}")
+            
+            # Проверяем наличие обязательных полей
+            if not isinstance(data, dict):
+                raise ResponseParseError("Ответ должен быть JSON объектом")
+            
+            if 'status' not in data:
+                raise ResponseParseError("Отсутствует поле 'status' в ответе")
+            
+            if 'response' not in data:
+                raise ResponseParseError("Отсутствует поле 'response' в ответе")
+            
+            status = data['status'].lower()
+            
+            # Проверяем и исправляем неправильные статусы для ордеров
+            valid_orders_statuses = ['pause', 'cancel', 'sell']
+            if status not in valid_orders_statuses:
+                logger.warning(f"🚨 НЕПРАВИЛЬНЫЙ СТАТУС ОРДЕРОВ '{status}' -> ИСПРАВЛЯЮ НА 'pause'")
+                status = 'pause'
+                data['status'] = 'pause'
+                data['response'] = f"Исправлен неправильный статус '{data.get('status', 'unknown')}' на 'pause'"
+            
+            # Создаем соответствующее решение
+            if status == 'pause':
+                decision = PauseDecision(**data)
+            elif status == 'cancel':
+                if 'order_id' not in data:
+                    raise ResponseParseError("Для отмены ордера требуется поле 'order_id'")
+                decision = OrdersCancelDecision(**data)
+            elif status == 'sell':
+                # sell_amount может быть None (продать все)
+                decision = OrdersSellDecision(**data)
+            else:
+                raise ResponseParseError(f"Неизвестный статус для ордеров: {status}")
+            
+            logger.success(f"✅ РЕШЕНИЕ ПО ОРДЕРАМ: {type(decision).__name__}")
+            return decision
+            
+        except Exception as e:
+            logger.error(f"Ошибка парсинга решения по ордерам: {e}")
+            # Возвращаем безопасное решение
+            return PauseDecision(
+                status="pause",
+                response=f"Ошибка парсинга: {str(e)}"
+            )
     
     @staticmethod
     def decision_to_api_payload(

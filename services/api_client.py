@@ -305,6 +305,17 @@ class TradingAPIClient:
         logger.info(f"Размещение ордера на продажу: {amount} BTC")
         return await self._make_request("POST", "/api/v1/sell", json_data=json_data)
     
+    async def get_orders(self) -> Dict[str, Any]:
+        """
+        Получает список активных ордеров.
+        
+        Returns:
+            Список активных ордеров
+        """
+        params = {"demo": str(self.demo_mode).lower()}
+        logger.info("Получение списка активных ордеров")
+        return await self._make_request("GET", "/api/v1/orders", params=params)
+    
     async def cancel_order(self, order_id: str) -> Dict[str, Any]:
         """
         Отменяет ордер.
@@ -322,6 +333,52 @@ class TradingAPIClient:
         
         logger.info(f"Отмена ордера: {order_id}")
         return await self._make_request("POST", "/api/v1/cancel", json_data=json_data)
+    
+    async def cancel_order_by_inst_id(self, inst_id: str, ord_id: str) -> Dict[str, Any]:
+        """
+        Отменяет ордер по instId и ordId.
+        
+        Args:
+            inst_id: Идентификатор инструмента (например, BTC-USDT)
+            ord_id: ID ордера для отмены
+            
+        Returns:
+            Результат отмены ордера
+        """
+        json_data = {
+            "instId": inst_id,
+            "ordId": ord_id
+        }
+        
+        params = {"demo": str(self.demo_mode).lower()}
+        logger.info(f"Отмена ордера {ord_id} для {inst_id}")
+        return await self._make_request("POST", "/api/v1/orders/cancel", json_data=json_data, params=params)
+    
+    async def sell_all_btc(self, inst_id: str = "BTC-USDT") -> Dict[str, Any]:
+        """
+        Продает весь доступный BTC.
+        
+        Args:
+            inst_id: Идентификатор инструмента
+            
+        Returns:
+            Результат продажи
+        """
+        # Сначала получаем текущий баланс
+        market_data = await self.get_market_monitor()
+        btc_balance = market_data.user_data.balances.BTC
+        
+        if btc_balance <= 0:
+            logger.warning("Нет BTC для продажи")
+            return {"success": False, "message": "Нет BTC для продажи"}
+        
+        json_data = {
+            "sell_amount": btc_balance,
+            "inst_id": inst_id
+        }
+        
+        logger.info(f"Продажа всего BTC: {btc_balance} BTC")
+        return await self._make_request("POST", "/api/v1/sell", json_data=json_data)
     
     async def test_connection(self) -> bool:
         """

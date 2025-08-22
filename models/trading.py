@@ -31,61 +31,65 @@ class OrderStatus(str, Enum):
 
 class OrderBookEntry(BaseModel):
     """Запись в стакане ордеров."""
-    price: float = Field(..., description="Цена")
-    amount: float = Field(..., description="Объем")
-    count: int = Field(..., description="Количество ордеров")
-    change: float = Field(default=0.0, description="Изменение")
+    price: str = Field(..., description="Цена")
+    size: str = Field(..., description="Размер")
+    side: str = Field(..., description="Сторона (bid/ask)")
 
 
-class OrderBook(BaseModel):
-    """Стакан ордеров."""
-    asks: List[OrderBookEntry] = Field(..., description="Ордера на продажу")
-    bids: List[OrderBookEntry] = Field(..., description="Ордера на покупку")
+class Candle(BaseModel):
+    """Свеча OHLCV."""
     timestamp: str = Field(..., description="Временная метка")
+    open: str = Field(..., description="Цена открытия")
+    high: str = Field(..., description="Максимальная цена")
+    low: str = Field(..., description="Минимальная цена")
+    close: str = Field(..., description="Цена закрытия")
+    volume: str = Field(..., description="Объем")
 
 
-class CandleData(BaseModel):
-    """Данные свечи."""
-    timestamp: str = Field(..., description="Временная метка")
-    open: float = Field(..., description="Цена открытия")
-    high: float = Field(..., description="Максимальная цена")
-    low: float = Field(..., description="Минимальная цена")
-    close: float = Field(..., description="Цена закрытия")
-    volume: float = Field(..., description="Объем торгов")
-    volume_currency: float = Field(..., description="Объем в валюте")
-    volume_currency_quote: float = Field(..., description="Объем в котируемой валюте")
-    confirm: int = Field(..., description="Подтверждение")
+class Balance(BaseModel):
+    """Баланс валюты."""
+    USDT: float = Field(default=0.0, description="Баланс USDT")
+    BTC: float = Field(default=0.0, description="Баланс BTC")
 
 
-class MarketIndicators(BaseModel):
+class ActiveOrder(BaseModel):
+    """Активный ордер."""
+    instId: str = Field(..., description="Идентификатор инструмента")
+    ordId: str = Field(..., description="ID ордера")
+    px: str = Field(..., description="Цена")
+    sz: str = Field(..., description="Размер")
+    side: str = Field(..., description="Сторона (buy/sell)")
+    ordType: str = Field(..., description="Тип ордера")
+    state: str = Field(..., description="Состояние ордера")
+    cTime: str = Field(..., description="Время создания")
+    uTime: str = Field(..., description="Время обновления")
+
+
+class Indicators(BaseModel):
     """Рыночные индикаторы."""
-    current_price: float = Field(..., description="Текущая цена")
-    volume_24h: float = Field(..., description="Объем за 24 часа")
-    change_24h: float = Field(..., description="Изменение за 24 часа в %")
-    high_24h: float = Field(..., description="Максимум за 24 часа")
-    low_24h: float = Field(..., description="Минимум за 24 часа")
-
-
-class UserBalance(BaseModel):
-    """Баланс пользователя."""
-    USDT: float = Field(..., description="Баланс USDT")
-    BTC: float = Field(..., description="Баланс BTC")
-
-
-class UserData(BaseModel):
-    """Пользовательские данные."""
-    active_orders: List[Dict[str, Any]] = Field(..., description="Активные ордера")
-    balances: UserBalance = Field(..., description="Балансы")
+    current_price: str = Field(default="0", description="Текущая цена")
+    volume_24h: str = Field(default="0", description="Объем за 24 часа")
+    change_24h: str = Field(default="0", description="Изменение за 24 часа")
+    high_24h: str = Field(default="0", description="Максимум за 24 часа")
+    low_24h: str = Field(default="0", description="Минимум за 24 часа")
 
 
 class MarketData(BaseModel):
     """Полные рыночные данные."""
-    inst_id: str = Field(..., description="Идентификатор инструмента")
-    market_data: Dict[str, Any] = Field(..., description="Рыночные данные")
-    user_data: UserData = Field(..., description="Пользовательские данные")
-    indicators: MarketIndicators = Field(..., description="Индикаторы")
-    timestamp: str = Field(..., description="Временная метка")
+    success: bool = Field(..., description="Успешность запроса")
+    inst_id: str = Field(..., description="Идентификатор инструмента (например, BTC-USDT)")
+    market_data: Dict[str, Any] = Field(..., description="Рыночные данные (стакан, свечи)")
+    user_data: Dict[str, Any] = Field(..., description="Пользовательские данные (балансы, активные ордера)")
+    indicators: Dict[str, Any] = Field(..., description="Текущие индикаторы рынка")
+    timestamp: str = Field(..., description="Временная метка данных")
+    message: Optional[str] = Field(None, description="Сообщение от API")
+
+
+class OrdersResponse(BaseModel):
+    """Ответ с активными ордерами."""
+    success: bool = Field(..., description="Успешность запроса")
     message: str = Field(..., description="Сообщение")
+    orders: List[ActiveOrder] = Field(default=[], description="Список активных ордеров")
 
 
 class OrderData(BaseModel):

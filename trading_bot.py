@@ -9,7 +9,7 @@ from services import TradingAPIClient
 from services.openai_simple_handler import OpenAISimpleHandler
 from handlers import ResponseParser
 from models.trading import MarketData
-from models.responses import BuyDecision, SellDecision, CancelDecision, PauseDecision
+from models.responses import BuyDecision, SellDecision, CancelDecision, PauseDecision, OrdersCancelDecision, OrdersSellDecision, TradingDecision, OrdersDecision
 from utils import setup_logger, log_trading_decision, log_api_call, log_openai_interaction
 
 
@@ -33,6 +33,10 @@ class TradingBot:
         self.parser = ResponseParser()
         self.is_initialized = False
         self.is_running = False
+        
+        # Таймеры для проверки ордеров
+        self.last_orders_check = 0
+        self.orders_check_interval = 1800  # 30 минут в секундах
         
         # Настраиваем логирование
         setup_logger(settings)
@@ -90,6 +94,46 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Ошибка отправки начальных данных: {e}")
             raise
+    
+    async def check_orders_cycle(self) -> None:
+        """Проверка и управление ордерами - выполняется каждые 30 минут."""
+        try:
+            current_time = time.time()
+            
+            # Проверяем, нужно ли проверять ордера
+            if current_time - self.last_orders_check < self.orders_check_interval:
+                return
+            
+            logger.info("🔄 НАЧАЛО ПРОВЕРКИ ОРДЕРОВ")
+            
+            # Получаем активные ордера
+            start_time = time.time()
+            orders_data = await self.api_client.get_orders()
+            response_time = time.time() - start_time
+            
+            log_api_call("/api/v1/orders", "GET", 200, response_time)
+            
+            # Получаем текущие рыночные данные
+            market_data = await self.api_client.get_market_monitor()
+            
+            # Получаем решение от OpenAI по ордерам
+            start_time = time.time()
+            response = await self.openai_handler.check_orders_decision(orders_data, market_data)
+            response_time = time.time() - start_time
+            
+            log_openai_interaction("orders_check", len(response), response_time)
+            
+            # Парсим и выполняем решение
+            decision = self.parser.parse_orders_decision(response)
+            await self.execute_orders_decision(decision)
+            
+            # Обновляем время последней проверки
+            self.last_orders_check = current_time
+            logger.success("✅ ПРОВЕРКА ОРДЕРОВ ЗАВЕРШЕНА")
+            
+        except Exception as e:
+            logger.error(f"❌ ОШИБКА ПРОВЕРКИ ОРДЕРОВ: {e}")
+            # Не прерываем выполнение, продолжаем в следующем цикле
     
     async def trading_cycle(self) -> None:
         """Основной цикл торговли - выполняется каждые 5 минут."""
@@ -174,6 +218,66 @@ class TradingBot:
             logger.error(f"Ошибка выполнения решения {type(decision).__name__}: {e}")
             raise
     
+    async def execute_orders_decision(self, decision: OrdersDecision) -> None:
+        """
+        Выполняет решение по управлению ордерами.
+        
+        Args:
+            decision: Решение от OpenAI по ордерам
+        """
+        try:
+            if isinstance(decision, PauseDecision):
+                log_trading_decision("orders_pause", decision.response)
+                logger.info(f"ОРДЕРА ПАУЗА: {decision.response}")
+            
+            elif isinstance(decision, OrdersCancelDecision):
+                log_trading_decision("orders_cancel", f"Ордер: {decision.order_id} - {decision.response}")
+                
+                # Отменяем ордер через новый метод
+                result = await self.api_client.cancel_order_by_inst_id("BTC-USDT", decision.order_id)
+                
+                logger.success(f"ОТМЕНА ОРДЕРА выполнена: {result}")
+                
+                # После отмены проверяем баланс и продаем BTC если нужно
+                await self._handle_post_cancel_actions()
+            
+            elif isinstance(decision, OrdersSellDecision):
+                log_trading_decision("orders_sell", f"Продажа: {decision.sell_amount or 'все'} BTC - {decision.response}")
+                
+                if decision.sell_amount is None:
+                    # Продаем весь BTC
+                    result = await self.api_client.sell_all_btc()
+                else:
+                    # Продаем указанное количество
+                    result = await self.api_client.place_sell_order(decision.sell_amount)
+                
+                logger.success(f"ПРОДАЖА ОРДЕРА выполнена: {result}")
+            
+            else:
+                logger.warning(f"Неизвестный тип решения по ордерам: {type(decision)}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка выполнения решения по ордерам: {e}")
+    
+    async def _handle_post_cancel_actions(self) -> None:
+        """Обрабатывает действия после отмены ордера."""
+        try:
+            # Получаем обновленный баланс
+            market_data = await self.api_client.get_market_monitor()
+            btc_balance = market_data.user_data.get('balances', {}).get('BTC', 0)
+            
+            if btc_balance > 0:
+                logger.info(f"💰 ПОСЛЕ ОТМЕНЫ ОРДЕРА: есть {btc_balance} BTC для продажи")
+                
+                # Продаем весь BTC
+                result = await self.api_client.sell_all_btc()
+                logger.success(f"ПРОДАЖА ПОСЛЕ ОТМЕНЫ: {result}")
+            else:
+                logger.info("💰 ПОСЛЕ ОТМЕНЫ ОРДЕРА: нет BTC для продажи")
+                
+        except Exception as e:
+            logger.error(f"Ошибка обработки действий после отмены: {e}")
+    
     async def run(self) -> None:
         """Запускает торгового бота."""
         if not self.is_initialized:
@@ -189,6 +293,10 @@ class TradingBot:
             # Основной цикл торговли
             while self.is_running:
                 try:
+                    # Проверяем ордера каждые 30 минут
+                    await self.check_orders_cycle()
+                    
+                    # Основной торговый цикл каждые 5 минут
                     await self.trading_cycle()
                     
                     # Ждем до следующего цикла (5 минут)
