@@ -5,7 +5,7 @@ from typing import Optional
 from loguru import logger
 
 from config.settings import Settings
-from services import TradingAPIClient
+from services import TradingAPIClient, TelegramNotifier
 from services.openai_simple_handler import OpenAISimpleHandler
 from handlers import ResponseParser
 from models.trading import MarketData
@@ -30,6 +30,7 @@ class TradingBot:
         self.settings = settings
         self.api_client: Optional[TradingAPIClient] = None
         self.openai_handler: Optional[OpenAISimpleHandler] = None
+        self.telegram_notifier: Optional[TelegramNotifier] = None
         self.parser = ResponseParser()
         self.is_initialized = False
         self.is_running = False
@@ -57,6 +58,13 @@ class TradingBot:
             # Инициализируем OpenAI обработчик
             self.openai_handler = OpenAISimpleHandler(self.settings)
             await self.openai_handler.initialize()
+            
+            # Инициализируем Telegram уведомления
+            self.telegram_notifier = TelegramNotifier(self.settings)
+            if not await self.telegram_notifier.test_connection():
+                logger.warning("⚠️ Не удалось подключиться к Telegram API")
+            else:
+                logger.success("✅ Telegram уведомления подключены")
             
             self.is_initialized = True
             logger.success("Все компоненты успешно инициализированы")
@@ -87,7 +95,7 @@ class TradingBot:
             
             # Парсим и обрабатываем ответ
             decision = self.parser.parse_and_validate(response)
-            await self.execute_decision(decision)
+            await self.execute_decision(decision, market_data)
             
             logger.success("Начальные данные успешно обработаны")
             
@@ -161,7 +169,7 @@ class TradingBot:
             
             # Парсим и обрабатываем ответ
             decision = self.parser.parse_and_validate(response)
-            await self.execute_decision(decision)
+            await self.execute_decision(decision, market_data)
             
             logger.debug("Торговый цикл завершен успешно")
             
@@ -175,13 +183,15 @@ class TradingBot:
     
     async def execute_decision(
         self, 
-        decision: BuyDecision | SellDecision | CancelDecision | PauseDecision
+        decision: BuyDecision | SellDecision | CancelDecision | PauseDecision,
+        market_data: MarketData
     ) -> None:
         """
         Выполняет торговое решение.
         
         Args:
             decision: Решение от OpenAI
+            market_data: Текущие рыночные данные
         """
         try:
             if isinstance(decision, PauseDecision):
@@ -201,6 +211,20 @@ class TradingBot:
                 )
                 
                 logger.success(f"ПОКУПКА выполнена: {result}")
+                
+                # Отправляем Telegram уведомление о покупке
+                if self.telegram_notifier:
+                    try:
+                        current_price = market_data.indicators.get('current_price', 'N/A')
+                        await self.telegram_notifier.notify_buy_order(
+                            decision.buy_amount,
+                            decision.take_profit_percent,
+                            decision.stop_loss_percent,
+                            current_price,
+                            decision.response
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки Telegram уведомления о покупке: {e}")
             
             elif isinstance(decision, SellDecision):
                 log_trading_decision("sell", f"Количество: {decision.sell_amount} BTC")
@@ -238,6 +262,26 @@ class TradingBot:
                 
                 logger.success(f"ОТМЕНА ОРДЕРА выполнена: {result}")
                 
+                # Отправляем Telegram уведомление об отмене
+                if self.telegram_notifier:
+                    try:
+                        # Получаем детали ордера для уведомления
+                        orders_data = await self.api_client.get_orders()
+                        order_details = None
+                        
+                        for order in orders_data.get('orders', []):
+                            if order.get('ordId') == decision.order_id:
+                                order_details = order
+                                break
+                        
+                        await self.telegram_notifier.notify_cancel_order(
+                            decision.order_id,
+                            decision.response,
+                            order_details
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки Telegram уведомления об отмене: {e}")
+                
                 # После отмены проверяем баланс и продаем BTC если нужно
                 await self._handle_post_cancel_actions()
             
@@ -272,6 +316,16 @@ class TradingBot:
                 # Продаем весь BTC
                 result = await self.api_client.sell_all_btc()
                 logger.success(f"ПРОДАЖА ПОСЛЕ ОТМЕНЫ: {result}")
+                
+                # Отправляем Telegram уведомление о продаже после отмены
+                if self.telegram_notifier:
+                    try:
+                        await self.telegram_notifier.notify_sell_after_cancel(
+                            btc_balance,
+                            "Автоматическая продажа BTC после отмены ордера"
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки Telegram уведомления о продаже после отмены: {e}")
             else:
                 logger.info("💰 ПОСЛЕ ОТМЕНЫ ОРДЕРА: нет BTC для продажи")
                 
@@ -326,6 +380,8 @@ class TradingBot:
         try:
             if self.api_client:
                 await self.api_client.close()
+            if self.telegram_notifier:
+                await self.telegram_notifier.close()
             logger.info("Ресурсы очищены")
         except Exception as e:
             logger.error(f"Ошибка при очистке ресурсов: {e}")
