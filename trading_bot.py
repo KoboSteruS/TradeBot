@@ -37,7 +37,7 @@ class TradingBot:
         
         # Таймеры для проверки ордеров
         self.last_orders_check = 0
-        self.orders_check_interval = 1800  # 30 минут в секундах
+        self.orders_check_interval = 600  # 10 минут в секундах (более частые проверки для лучшего анализа)
         
         # Настраиваем логирование
         setup_logger(settings)
@@ -104,7 +104,7 @@ class TradingBot:
             raise
     
     async def check_orders_cycle(self) -> None:
-        """Проверка и управление ордерами - выполняется каждые 30 минут."""
+        """Проверка и управление ордерами - выполняется каждые 10 минут."""
         try:
             current_time = time.time()
             
