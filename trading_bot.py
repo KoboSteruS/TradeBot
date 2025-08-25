@@ -214,8 +214,8 @@ class TradingBot:
                     log_trading_decision("pause", f"Недостаточно средств для покупки: требуется {decision.buy_amount} USDT, доступно {current_balance} USDT")
                     return
                 
-                # Проверяем резерв (оставляем 30-40 USDT)
-                reserve_needed = 35  # средний резерв
+                # Проверяем резерв (оставляем 20-30 USDT)
+                reserve_needed = 25  # уменьшенный резерв для более агрессивной торговли
                 available_for_trading = current_balance - reserve_needed
                 
                 if decision.buy_amount > available_for_trading:
@@ -332,7 +332,14 @@ class TradingBot:
         try:
             # Получаем обновленный баланс
             market_data = await self.api_client.get_market_monitor()
-            btc_balance = market_data.user_data.get('balances', {}).get('BTC', 0)
+            
+            # Проверяем структуру данных
+            if hasattr(market_data, 'user_data'):
+                # Если это объект MarketData
+                btc_balance = market_data.user_data.get('balances', {}).get('BTC', 0)
+            else:
+                # Если это словарь
+                btc_balance = market_data.get('user_data', {}).get('balances', {}).get('BTC', 0)
             
             if btc_balance > 0:
                 logger.info(f"💰 ПОСЛЕ ОТМЕНЫ ОРДЕРА: есть {btc_balance} BTC для продажи")
