@@ -199,12 +199,28 @@ class TradingBot:
                 logger.info(f"ПАУЗА: {decision.response}")
             
             elif isinstance(decision, BuyDecision):
-                # Проверяем баланс перед покупкой
+                # Проверяем баланс перед покупкой (агрессивная стратегия)
                 current_balance = market_data.user_data.get('balances', {}).get('USDT', 0)
                 
+                # Минимальный размер сделки 10 USDT
+                if decision.buy_amount < 10:
+                    logger.warning(f"⚠️ СЛИШКОМ МАЛАЯ СДЕЛКА: {decision.buy_amount} USDT < 10 USDT минимума")
+                    log_trading_decision("pause", f"Слишком малая сделка: {decision.buy_amount} USDT < 10 USDT минимума")
+                    return
+                
+                # Проверяем достаточность средств
                 if current_balance < decision.buy_amount:
                     logger.warning(f"⚠️ НЕДОСТАТОЧНО СРЕДСТВ: требуется {decision.buy_amount} USDT, доступно {current_balance} USDT")
                     log_trading_decision("pause", f"Недостаточно средств для покупки: требуется {decision.buy_amount} USDT, доступно {current_balance} USDT")
+                    return
+                
+                # Проверяем резерв (оставляем 30-40 USDT)
+                reserve_needed = 35  # средний резерв
+                available_for_trading = current_balance - reserve_needed
+                
+                if decision.buy_amount > available_for_trading:
+                    logger.warning(f"⚠️ НАРУШЕНИЕ РЕЗЕРВА: сделка {decision.buy_amount} USDT оставит меньше {reserve_needed} USDT резерва")
+                    log_trading_decision("pause", f"Нарушение резерва: сделка {decision.buy_amount} USDT оставит меньше {reserve_needed} USDT резерва")
                     return
                 
                 log_trading_decision(
